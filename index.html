@@ -1,0 +1,2638 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>格雷码 × 超立方体 — 交互式可视化</title>
+<style>
+  :root {
+    --bg: #0a0e17;
+    --bg2: #0f1520;
+    --bg3: #141c2b;
+    --ink: #e0e6f0;
+    --muted: #7a8ba8;
+    --cyan: #00e5ff;
+    --cyan2: #00bcd4;
+    --red: #ff5252;
+    --green: #69f0ae;
+    --gold: #ffd740;
+    --glow: 0 0 20px rgba(0,229,255,.35);
+    --mono: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+    --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.7;
+    overflow-x: hidden;
+  }
+  /* ---- NAV ---- */
+  nav {
+    position: fixed; top:0; left:0; right:0; z-index:100;
+    background: rgba(10,14,23,.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(0,229,255,.1);
+    display: flex; align-items: center; justify-content: center;
+    gap: 2rem; padding: .7rem 1rem;
+  }
+  nav a {
+    color: var(--muted); text-decoration: none; font-size: .85rem;
+    transition: color .2s;
+    font-weight: 500;
+  }
+  nav a:hover, nav a.active { color: var(--cyan); }
+  /* ---- HERO ---- */
+  .hero {
+    min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center;
+    padding: 2rem;
+    background: radial-gradient(ellipse at 50% 30%, rgba(0,229,255,.06) 0%, transparent 70%);
+  }
+  .hero h1 {
+    font-size: clamp(2.2rem, 5vw, 4rem);
+    font-weight: 800;
+    letter-spacing: -.02em;
+    line-height: 1.2;
+    margin-bottom: .6rem;
+  }
+  .hero h1 span { color: var(--cyan); }
+  .hero .subtitle {
+    font-size: clamp(1rem, 2vw, 1.3rem);
+    color: var(--muted);
+    max-width: 640px;
+    margin-bottom: 2.5rem;
+  }
+  .hero .formula-box {
+    font-family: var(--mono);
+    font-size: 1.15rem;
+    color: var(--cyan);
+    background: rgba(0,229,255,.06);
+    border: 1px solid rgba(0,229,255,.15);
+    border-radius: 10px;
+    padding: .8rem 1.6rem;
+    margin-bottom: 2rem;
+  }
+  .hero .arrow-hint {
+    color: var(--muted);
+    font-size: 2rem;
+    animation: bounce 2s infinite;
+  }
+  @keyframes bounce {
+    0%,100% { transform: translateY(0); }
+    50% { transform: translateY(10px); }
+  }
+  /* ---- SECTIONS ---- */
+  section {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 5rem 2rem;
+  }
+  section.alt {
+    background: var(--bg2);
+    max-width: 100%;
+    padding-left: 0; padding-right: 0;
+  }
+  section.alt > .inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+  .section-title {
+    font-size: clamp(1.5rem, 3vw, 2.2rem);
+    font-weight: 700;
+    margin-bottom: .5rem;
+  }
+  .section-title span { color: var(--cyan); }
+  .section-desc {
+    color: var(--muted);
+    font-size: 1rem;
+    margin-bottom: 2.5rem;
+    max-width: 640px;
+  }
+  /* ---- 2D VIZ ---- */
+  .viz2d-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: flex-start;
+  }
+  .viz2d-canvas {
+    flex: 1 1 340px;
+    display: flex; justify-content: center;
+  }
+  .viz2d-canvas canvas {
+    background: var(--bg);
+    border-radius: 12px;
+    border: 1px solid rgba(0,229,255,.1);
+  }
+  .viz2d-panel {
+    flex: 1 1 280px;
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+  .path-btn {
+    padding: .7rem 1.2rem;
+    border-radius: 8px;
+    border: 1px solid rgba(0,229,255,.2);
+    background: rgba(0,229,255,.05);
+    color: var(--ink);
+    font-size: .95rem;
+    cursor: pointer;
+    transition: all .2s;
+    font-family: var(--sans);
+  }
+  .path-btn:hover { background: rgba(0,229,255,.12); }
+  .path-btn.active {
+    background: rgba(0,229,255,.15);
+    border-color: var(--cyan);
+    color: var(--cyan);
+    box-shadow: var(--glow);
+  }
+  .hamming-display {
+    font-family: var(--mono);
+    font-size: .9rem;
+    color: var(--muted);
+    padding: .6rem 1rem;
+    background: var(--bg);
+    border-radius: 8px;
+    min-height: 3.6rem;
+  }
+  .hamming-display .changed {
+    color: var(--red);
+    font-weight: 700;
+  }
+  .hamming-display .same {
+    color: var(--green);
+  }
+  .hamming-display .step-info {
+    color: var(--gold);
+    font-weight: 600;
+  }
+  .step-nav {
+    display: flex; gap: .5rem;
+  }
+  .step-nav button {
+    flex: 1;
+    padding: .55rem;
+    border-radius: 8px;
+    border: 1px solid rgba(0,229,255,.15);
+    background: rgba(0,229,255,.04);
+    color: var(--ink);
+    font-size: .85rem;
+    cursor: pointer;
+    transition: all .15s;
+    font-family: var(--sans);
+  }
+  .step-nav button:hover { background: rgba(0,229,255,.1); }
+  /* ---- 3D VIZ ---- */
+  .viz3d-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: flex-start;
+  }
+  .viz3d-canvas {
+    flex: 1 1 500px;
+    position: relative;
+  }
+  .viz3d-canvas canvas {
+    border-radius: 12px;
+    border: 1px solid rgba(0,229,255,.1);
+  }
+  .viz3d-panel {
+    flex: 0 0 300px;
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+  .seq-panel {
+    font-family: var(--mono);
+    font-size: .82rem;
+    line-height: 1.9;
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 1rem 1.2rem;
+    border: 1px solid rgba(0,229,255,.08);
+  }
+  .seq-panel .seq-item {
+    display: flex; align-items: center; gap: .5rem;
+    padding: .15rem .4rem;
+    border-radius: 4px;
+    transition: background .3s;
+  }
+  .seq-panel .seq-item.active {
+    background: rgba(0,229,255,.1);
+    color: var(--cyan);
+  }
+  .seq-panel .seq-item .idx {
+    color: var(--muted);
+    width: 1.5rem;
+    text-align: right;
+  }
+  .seq-panel .seq-item .arrow {
+    color: var(--muted);
+  }
+  .formula-live {
+    font-family: var(--mono);
+    font-size: .85rem;
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 1rem;
+    border: 1px solid rgba(0,229,255,.08);
+    color: var(--muted);
+  }
+  .formula-live .val { color: var(--cyan); }
+  .formula-live .xor-result { color: var(--gold); }
+  .speed-control {
+    display: flex; align-items: center; gap: .8rem;
+    font-size: .85rem; color: var(--muted);
+  }
+  .speed-control input[type=range] {
+    flex: 1;
+    accent-color: var(--cyan);
+  }
+  /* ---- MIRROR ---- */
+  .mirror-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: flex-start;
+  }
+  .mirror-canvas {
+    flex: 1 1 400px;
+    display: flex; justify-content: center;
+  }
+  .mirror-canvas canvas {
+    background: var(--bg);
+    border-radius: 12px;
+    border: 1px solid rgba(0,229,255,.1);
+  }
+  .mirror-panel {
+    flex: 1 1 280px;
+    display: flex; flex-direction: column; gap: 1rem;
+  }
+  .mirror-steps {
+    font-size: .9rem;
+    color: var(--muted);
+    line-height: 1.9;
+  }
+  .mirror-steps .step {
+    padding: .4rem .6rem;
+    border-radius: 6px;
+    transition: all .4s;
+    cursor: pointer;
+  }
+  .mirror-steps .step.active {
+    background: rgba(0,229,255,.08);
+    color: var(--ink);
+  }
+  .mirror-steps .step .num {
+    display: inline-block;
+    width: 1.5rem;
+    height: 1.5rem;
+    line-height: 1.5rem;
+    text-align: center;
+    border-radius: 50%;
+    background: rgba(0,229,255,.1);
+    color: var(--cyan);
+    font-size: .75rem;
+    font-weight: 700;
+    margin-right: .4rem;
+  }
+  /* ---- INTERACTIVE ---- */
+  .interactive-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: flex-start;
+  }
+  .interactive-panel {
+    flex: 1 1 340px;
+    display: flex; flex-direction: column; gap: 1.2rem;
+  }
+  .n-control {
+    display: flex; align-items: center; gap: 1rem;
+  }
+  .n-control label { font-size: .95rem; color: var(--muted); }
+  .n-control input[type=range] {
+    flex: 1;
+    accent-color: var(--cyan);
+  }
+  .n-control .n-val {
+    font-family: var(--mono);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--cyan);
+    width: 2rem;
+    text-align: center;
+  }
+  .gray-table {
+    font-family: var(--mono);
+    font-size: .82rem;
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 1rem;
+    border: 1px solid rgba(0,229,255,.08);
+    max-height: 400px;
+    overflow-y: auto;
+  }
+  .gray-table table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  .gray-table th {
+    color: var(--muted);
+    font-weight: 600;
+    text-align: left;
+    padding: .3rem .6rem;
+    border-bottom: 1px solid rgba(0,229,255,.1);
+    position: sticky; top: 0;
+    background: var(--bg);
+  }
+  .gray-table td {
+    padding: .25rem .6rem;
+    color: var(--ink);
+  }
+  .gray-table tr:hover td {
+    background: rgba(0,229,255,.04);
+  }
+  .gray-table .hamming-ok {
+    color: var(--green);
+    font-weight: 600;
+  }
+  .hamming-verify {
+    font-size: .85rem;
+    padding: .7rem 1rem;
+    border-radius: 8px;
+    background: var(--bg);
+    border: 1px solid rgba(0,229,255,.08);
+  }
+  .hamming-verify .ok { color: var(--green); font-weight: 600; }
+  .hamming-verify .detail { color: var(--muted); font-size: .8rem; }
+  .interactive-viz {
+    flex: 1 1 400px;
+    display: flex; justify-content: center;
+  }
+  .interactive-viz canvas {
+    background: var(--bg);
+    border-radius: 12px;
+    border: 1px solid rgba(0,229,255,.1);
+  }
+  /* ---- FOOTER ---- */
+  footer {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--muted);
+    font-size: .85rem;
+    border-top: 1px solid rgba(0,229,255,.06);
+  }
+  footer a { color: var(--cyan2); text-decoration: none; }
+  /* ---- CHALLENGES ---- */
+  .ch-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2rem;
+    align-items: flex-start;
+  }
+  .ch-cube-wrap {
+    flex: 1 1 500px;
+    position: relative;
+  }
+  .ch-cube-wrap canvas {
+    border-radius: 12px;
+    border: 1px solid rgba(0,229,255,.1);
+    cursor: crosshair;
+  }
+  .ch-panel {
+    flex: 0 0 320px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .ch-level-nav {
+    display: flex;
+    gap: .4rem;
+    flex-wrap: wrap;
+  }
+  .ch-level-btn {
+    padding: .5rem .8rem;
+    border-radius: 8px;
+    border: 1px solid rgba(0,229,255,.15);
+    background: rgba(0,229,255,.04);
+    color: var(--muted);
+    font-size: .82rem;
+    cursor: pointer;
+    transition: all .2s;
+    font-family: var(--sans);
+    font-weight: 500;
+  }
+  .ch-level-btn:hover {
+    background: rgba(0,229,255,.1);
+    color: var(--ink);
+  }
+  .ch-level-btn.active {
+    background: rgba(0,229,255,.15);
+    border-color: var(--cyan);
+    color: var(--cyan);
+    box-shadow: var(--glow);
+  }
+  .ch-level-btn.completed {
+    border-color: var(--green);
+    color: var(--green);
+  }
+  .ch-level-btn.completed::after {
+    content: ' ✓';
+  }
+  .ch-desc {
+    font-size: .88rem;
+    color: var(--muted);
+    line-height: 1.7;
+    background: var(--bg);
+    border-radius: 10px;
+    padding: 1rem;
+    border: 1px solid rgba(0,229,255,.08);
+  }
+  .ch-desc strong { color: var(--ink); }
+  .ch-desc .formula {
+    font-family: var(--mono);
+    color: var(--cyan);
+    font-size: .82rem;
+  }
+  .ch-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .6rem;
+    font-size: .78rem;
+    color: var(--muted);
+  }
+  .ch-legend-item {
+    display: flex;
+    align-items: center;
+    gap: .3rem;
+  }
+  .ch-legend-swatch {
+    width: 20px;
+    height: 4px;
+    border-radius: 2px;
+  }
+  .ch-action-row {
+    display: flex;
+    gap: .5rem;
+  }
+  .ch-action-btn {
+    flex: 1;
+    padding: .6rem .8rem;
+    border-radius: 8px;
+    border: 1px solid rgba(0,229,255,.2);
+    background: rgba(0,229,255,.05);
+    color: var(--ink);
+    font-size: .85rem;
+    cursor: pointer;
+    transition: all .15s;
+    font-family: var(--sans);
+    font-weight: 500;
+    text-align: center;
+  }
+  .ch-action-btn:hover {
+    background: rgba(0,229,255,.12);
+  }
+  .ch-action-btn.primary {
+    background: rgba(0,229,255,.15);
+    border-color: var(--cyan);
+    color: var(--cyan);
+  }
+  .ch-action-btn.danger {
+    border-color: rgba(255,82,82,.3);
+    color: var(--red);
+  }
+  .ch-action-btn.danger:hover {
+    background: rgba(255,82,82,.1);
+  }
+  .ch-stats {
+    font-family: var(--mono);
+    font-size: .82rem;
+    background: var(--bg);
+    border-radius: 10px;
+    padding: .8rem 1rem;
+    border: 1px solid rgba(0,229,255,.08);
+    color: var(--muted);
+    line-height: 1.8;
+  }
+  .ch-stats .val { color: var(--cyan); }
+  .ch-stats .ok { color: var(--green); }
+  .ch-stats .bad { color: var(--red); }
+  .ch-feedback {
+    font-size: .85rem;
+    padding: .8rem 1rem;
+    border-radius: 10px;
+    line-height: 1.7;
+    transition: all .3s;
+  }
+  .ch-feedback.success {
+    background: rgba(105,240,174,.08);
+    border: 1px solid rgba(105,240,174,.2);
+    color: var(--green);
+  }
+  .ch-feedback.error {
+    background: rgba(255,82,82,.08);
+    border: 1px solid rgba(255,82,82,.2);
+    color: var(--red);
+  }
+  .ch-feedback.info {
+    background: rgba(0,229,255,.06);
+    border: 1px solid rgba(0,229,255,.15);
+    color: var(--cyan);
+  }
+  .ch-feedback.hidden { display: none; }
+  .ch-modal-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(0,0,0,.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+  }
+  .ch-modal-overlay.show { display: flex; }
+  .ch-modal {
+    background: var(--bg2);
+    border: 1px solid rgba(0,229,255,.15);
+    border-radius: 16px;
+    padding: 2rem;
+    max-width: 480px;
+    width: 90%;
+  }
+  .ch-modal h3 {
+    color: var(--ink);
+    margin-bottom: 1rem;
+    font-size: 1.1rem;
+  }
+  .ch-modal-option {
+    display: block;
+    width: 100%;
+    text-align: left;
+    padding: .8rem 1rem;
+    margin-bottom: .5rem;
+    border-radius: 8px;
+    border: 1px solid rgba(0,229,255,.1);
+    background: rgba(0,229,255,.03);
+    color: var(--ink);
+    font-size: .88rem;
+    cursor: pointer;
+    transition: all .15s;
+    font-family: var(--sans);
+  }
+  .ch-modal-option:hover {
+    background: rgba(0,229,255,.08);
+    border-color: rgba(0,229,255,.25);
+  }
+  .ch-modal-option .reason-tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: .75rem;
+    color: var(--cyan);
+    background: rgba(0,229,255,.08);
+    padding: .15rem .4rem;
+    border-radius: 4px;
+    margin-left: .4rem;
+  }
+  .ch-modal-close {
+    margin-top: 1rem;
+    padding: .5rem 1rem;
+    border-radius: 8px;
+    border: 1px solid rgba(0,229,255,.15);
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: .85rem;
+    font-family: var(--sans);
+  }
+  .ch-discovery {
+    margin-top: 2rem;
+    padding: 1.5rem;
+    background: var(--bg);
+    border-radius: 12px;
+    border: 1px solid rgba(0,229,255,.1);
+    max-width: 1200px;
+  }
+  .ch-discovery h4 { color: var(--cyan); margin-bottom: .8rem; }
+  .ch-discovery .flip-counts {
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    color: var(--gold);
+    margin: .6rem 0;
+  }
+  .ch-discovery p {
+    color: var(--muted);
+    font-size: .88rem;
+    line-height: 1.7;
+    margin-bottom: .5rem;
+  }
+  .ch-discovery .proof {
+    font-family: var(--mono);
+    font-size: .82rem;
+    color: var(--ink);
+    background: rgba(0,229,255,.04);
+    padding: .8rem 1rem;
+    border-radius: 8px;
+    margin: .5rem 0;
+    line-height: 1.8;
+  }
+  /* ---- SCROLLBAR ---- */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: rgba(0,229,255,.15); border-radius: 3px; }
+  /* ---- RESPONSIVE ---- */
+  @media (max-width: 768px) {
+    nav { gap: 1rem; flex-wrap: wrap; }
+    .viz2d-wrap, .viz3d-wrap, .mirror-wrap, .interactive-wrap {
+      flex-direction: column;
+    }
+    .viz3d-panel { flex: 1 1 auto; }
+    section { padding: 3rem 1.2rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="#top">首页</a>
+  <a href="#sec-2d">二维</a>
+  <a href="#sec-3d">三维</a>
+  <a href="#sec-mirror">镜像构造</a>
+  <a href="#sec-interactive">交互探索</a>
+  <a href="#sec-challenges">挑战</a>
+</nav>
+
+<!-- HERO -->
+<div class="hero" id="top">
+  <h1>格雷码 = 超立方体上的 <span>哈密顿环</span></h1>
+  <p class="subtitle">
+    n 位二进制数构成 n 维超立方体的 2<sup>n</sup> 个顶点。格雷码就是沿着棱走过每个顶点恰好一次，最终回到起点的环。
+  </p>
+  <div class="formula-box">G = B ⊕ (B &gt;&gt; 1)</div>
+  <div class="arrow-hint">↓</div>
+</div>
+
+<!-- SECTION: 2D -->
+<section id="sec-2d">
+  <div class="section-title">二维：<span>正方形上的行走</span></div>
+  <p class="section-desc">
+    2 位二进制对应正方形的 4 个顶点。格雷码沿 4 条边走一圈；二进制序则需要穿越对角线。
+  </p>
+  <div class="viz2d-wrap">
+    <div class="viz2d-canvas">
+      <canvas id="canvas2d" width="400" height="400"></canvas>
+    </div>
+    <div class="viz2d-panel">
+      <button class="path-btn active" onclick="set2dMode('gray')">格雷码路径（沿棱走）</button>
+      <button class="path-btn" onclick="set2dMode('binary')">二进制路径（穿越）</button>
+      <div class="step-nav">
+        <button onclick="step2d(-1)">← 上一步</button>
+        <button onclick="step2dAuto()">▶ 自动播放</button>
+        <button onclick="step2d(1)">下一步 →</button>
+      </div>
+      <div class="hamming-display" id="hamming2d">
+        点击「下一步」开始演示
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: 3D -->
+<section class="alt" id="sec-3d">
+  <div class="inner">
+    <div class="section-title">三维：<span>立方体上的哈密顿环</span></div>
+    <p class="section-desc">
+      3 位格雷码遍历立方体的 8 个顶点。拖拽旋转，观察路径如何沿着棱移动。
+    </p>
+    <div class="viz3d-wrap">
+      <div class="viz3d-canvas">
+        <canvas id="canvas3d" width="600" height="500"></canvas>
+      </div>
+      <div class="viz3d-panel">
+        <button class="path-btn" id="btn3dPlay" onclick="toggle3dPlay()">▶ 播放动画</button>
+        <div class="speed-control">
+          <span>速度</span>
+          <input type="range" min="200" max="2000" value="800" id="speed3d" oninput="speed3dVal=this.value">
+        </div>
+        <div class="formula-live" id="formula3d">
+          等待播放...
+        </div>
+        <div class="seq-panel" id="seq3d">
+          <!-- filled by JS -->
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: MIRROR -->
+<section id="sec-mirror">
+  <div class="section-title">镜像构造：<span>为什么反转能拼成环</span></div>
+  <p class="section-desc">
+    n 位格雷码由 n-1 位递归构造：前半补 0，后半镜像反转后补 1。拼接处只变最高位，首尾也能相连。
+  </p>
+  <div class="mirror-wrap">
+    <div class="mirror-canvas">
+      <canvas id="canvasMirror" width="600" height="380"></canvas>
+    </div>
+    <div class="mirror-panel">
+      <div class="mirror-steps" id="mirrorSteps">
+        <!-- filled by JS -->
+      </div>
+      <button class="path-btn" onclick="mirrorAutoPlay()">▶ 自动播放构造过程</button>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: INTERACTIVE -->
+<section class="alt" id="sec-interactive">
+  <div class="inner">
+    <div class="section-title">交互探索：<span>n 维格雷码</span></div>
+    <p class="section-desc">
+      拖动滑块选择位数 n，查看完整的格雷码序列、汉明距离验证和可视化投影。
+    </p>
+    <div class="interactive-wrap">
+      <div class="interactive-panel">
+        <div class="n-control">
+          <label>位数 n =</label>
+          <input type="range" min="2" max="6" value="3" id="nSlider" oninput="updateInteractive()">
+          <div class="n-val" id="nVal">3</div>
+        </div>
+        <div class="hamming-verify" id="hammingVerify"></div>
+        <div class="gray-table" id="grayTable"></div>
+      </div>
+      <div class="interactive-viz">
+        <canvas id="canvasInteractive" width="480" height="480"></canvas>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- SECTION: CHALLENGES -->
+<section class="alt" id="sec-challenges">
+  <div class="inner">
+    <div class="section-title">挑战：<span>三维哈密顿环实验室</span></div>
+    <p class="section-desc">
+      同一个立方体，不同的约束。构造、判断、优化、发现规律——不要靠增加维数提高难度，而要靠增加约束和目标。
+    </p>
+    <div class="ch-wrap">
+      <div class="ch-cube-wrap">
+        <canvas id="canvasChallenge" width="560" height="500"></canvas>
+      </div>
+      <div class="ch-panel">
+        <div class="ch-level-nav" id="chLevelNav">
+          <button class="ch-level-btn active" onclick="chLoadLevel(0)">第一关：补全环</button>
+          <button class="ch-level-btn" onclick="chLoadLevel(1)">第二关：受限环</button>
+          <button class="ch-level-btn" onclick="chLoadLevel(2)">第三关：有解无解</button>
+          <button class="ch-level-btn" onclick="chLoadLevel(3)">第四关：最优环</button>
+        </div>
+        <div class="ch-desc" id="chDesc"></div>
+        <div class="ch-legend" id="chLegend"></div>
+        <div class="ch-action-row" id="chActions"></div>
+        <div class="ch-stats" id="chStats"></div>
+        <div class="ch-feedback hidden" id="chFeedback"></div>
+      </div>
+    </div>
+    <div class="ch-discovery" id="chDiscovery" style="display:none">
+      <h4>规律发现：维度翻转的不变量</h4>
+      <div id="chDiscoveryContent"></div>
+    </div>
+  </div>
+</section>
+
+<!-- MODAL for no-solution reasoning -->
+<div class="ch-modal-overlay" id="chModal">
+  <div class="ch-modal">
+    <h3 id="chModalTitle">为什么不存在哈密顿环？</h3>
+    <div id="chModalOptions"></div>
+    <button class="ch-modal-close" onclick="chCloseModal()">取消</button>
+  </div>
+</div>
+
+<footer>
+  格雷码可视化 — 理解超立方体上的哈密顿环
+</footer>
+
+<!-- Three.js for 3D -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+//  GRAY CODE CORE
+// ============================================================
+function grayEncode(b) {
+  return b ^ (b >> 1);
+}
+function grayDecode(g) {
+  let b = 0;
+  while (g) { b ^= g; g >>= 1; }
+  return b;
+}
+function graySequence(n) {
+  const len = 1 << n;
+  const seq = [];
+  for (let i = 0; i < len; i++) seq.push(grayEncode(i));
+  return seq;
+}
+function binarySequence(n) {
+  const len = 1 << n;
+  return Array.from({length: len}, (_, i) => i);
+}
+function hamming(a, b) {
+  let x = a ^ b, cnt = 0;
+  while (x) { cnt += x & 1; x >>= 1; }
+  return cnt;
+}
+function toBits(v, n) {
+  return v.toString(2).padStart(n, '0');
+}
+
+// ============================================================
+//  2D VISUALIZATION
+// ============================================================
+const canvas2d = document.getElementById('canvas2d');
+const ctx2d = canvas2d.getContext('2d');
+const W2 = 400, H2 = 400;
+const verts2d = [
+  {label:'00', x:100, y:300},
+  {label:'01', x:300, y:300},
+  {label:'11', x:300, y:100},
+  {label:'10', x:100, y:100},
+];
+const edges2d = [[0,1],[1,2],[2,3],[3,0]];
+const grayPath2d = [0,1,2,3]; // 00→01→11→10
+const binaryPath2d = [0,1,3,2]; // 00→01→10→11
+
+let mode2d = 'gray';
+let step2dIdx = -1;
+let autoPlayTimer2d = null;
+
+function set2dMode(m) {
+  mode2d = m;
+  step2dIdx = -1;
+  clearInterval(autoPlayTimer2d);
+  autoPlayTimer2d = null;
+  document.querySelectorAll('#sec-2d .path-btn').forEach((b,i) => {
+    b.classList.toggle('active', i === (m === 'gray' ? 0 : 1));
+  });
+  draw2d();
+  document.getElementById('hamming2d').innerHTML = '点击「下一步」开始演示';
+}
+
+function step2d(dir) {
+  const path = mode2d === 'gray' ? grayPath2d : binaryPath2d;
+  const maxStep = path.length; // 4 steps to complete cycle (back to start)
+  step2dIdx += dir;
+  if (step2dIdx < -1) step2dIdx = -1;
+  if (step2dIdx > maxStep) step2dIdx = maxStep;
+  draw2d();
+  updateHamming2d();
+}
+
+function step2dAuto() {
+  if (autoPlayTimer2d) {
+    clearInterval(autoPlayTimer2d);
+    autoPlayTimer2d = null;
+    return;
+  }
+  step2dIdx = -1;
+  draw2d();
+  autoPlayTimer2d = setInterval(() => {
+    const path = mode2d === 'gray' ? grayPath2d : binaryPath2d;
+    if (step2dIdx >= path.length) {
+      clearInterval(autoPlayTimer2d);
+      autoPlayTimer2d = null;
+      return;
+    }
+    step2dIdx++;
+    draw2d();
+    updateHamming2d();
+  }, 700);
+}
+
+function updateHamming2d() {
+  const path = mode2d === 'gray' ? grayPath2d : binaryPath2d;
+  const el = document.getElementById('hamming2d');
+  if (step2dIdx < 0) {
+    el.innerHTML = '起点: ' + verts2d[path[0]].label;
+    return;
+  }
+  if (step2dIdx >= path.length) {
+    el.innerHTML = '✓ 遍历完成！' + (mode2d === 'gray' ? ' 回到起点，汉明距离=1' : ' 10→11 汉明距离=1 ✓');
+    return;
+  }
+  const from = step2dIdx === 0 ? path[0] : path[step2dIdx - 1];
+  const to = path[step2dIdx];
+  const fromLabel = verts2d[(step2dIdx === 0 ? path[0] : path[step2dIdx - 1])].label;
+  const toLabel = verts2d[path[step2dIdx]].label;
+  const hd = hamming(parseInt(fromLabel, 2), parseInt(toLabel, 2));
+
+  let bitsHtml = '';
+  for (let i = 0; i < 2; i++) {
+    if (fromLabel[i] !== toLabel[i]) {
+      bitsHtml += `<span class="changed">${toLabel[i]}</span>`;
+    } else {
+      bitsHtml += `<span class="same">${toLabel[i]}</span>`;
+    }
+  }
+  el.innerHTML = `<span class="step-info">步骤 ${step2dIdx + 1}</span>: ${fromLabel} → ${toLabel} [${bitsHtml}] 汉明距离=<span class="${hd===1?'same':'changed'}">${hd}</span>`;
+}
+
+function draw2d() {
+  ctx2d.clearRect(0, 0, W2, H2);
+
+  // edges
+  edges2d.forEach(([a, b]) => {
+    ctx2d.beginPath();
+    ctx2d.moveTo(verts2d[a].x, verts2d[a].y);
+    ctx2d.lineTo(verts2d[b].x, verts2d[b].y);
+    ctx2d.strokeStyle = 'rgba(0,229,255,.15)';
+    ctx2d.lineWidth = 2;
+    ctx2d.stroke();
+  });
+
+  // path so far
+  const path = mode2d === 'gray' ? grayPath2d : binaryPath2d;
+  const stepsToShow = Math.min(step2dIdx + 1, path.length);
+
+  for (let i = 0; i < stepsToShow - 1; i++) {
+    const a = verts2d[path[i]], b = verts2d[path[i + 1]];
+    const hd = hamming(parseInt(a.label, 2), parseInt(b.label, 2));
+
+    if (hd > 1 && mode2d === 'binary') {
+      // diagonal jump - dashed red
+      ctx2d.beginPath();
+      ctx2d.setLineDash([8, 6]);
+      ctx2d.moveTo(a.x, a.y);
+      ctx2d.lineTo(b.x, b.y);
+      ctx2d.strokeStyle = 'rgba(255,82,82,.6)';
+      ctx2d.lineWidth = 2.5;
+      ctx2d.stroke();
+      ctx2d.setLineDash([]);
+
+      // X mark at midpoint
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      ctx2d.fillStyle = 'rgba(255,82,82,.7)';
+      ctx2d.font = 'bold 16px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+      ctx2d.fillText('✗', mx - 6, my - 8);
+    } else {
+      ctx2d.beginPath();
+      ctx2d.moveTo(a.x, a.y);
+      ctx2d.lineTo(b.x, b.y);
+      ctx2d.strokeStyle = 'rgba(0,229,255,.7)';
+      ctx2d.lineWidth = 3;
+      ctx2d.stroke();
+    }
+  }
+
+  // closing edge for gray (back to start)
+  if (mode2d === 'gray' && step2dIdx >= path.length) {
+    const a = verts2d[path[path.length - 1]], b = verts2d[path[0]];
+    ctx2d.beginPath();
+    ctx2d.moveTo(a.x, a.y);
+    ctx2d.lineTo(b.x, b.y);
+    ctx2d.strokeStyle = 'rgba(0,229,255,.7)';
+    ctx2d.lineWidth = 3;
+    ctx2d.stroke();
+  }
+
+  // direction arrows
+  for (let i = 0; i < stepsToShow - 1; i++) {
+    const a = verts2d[path[i]], b = verts2d[path[i + 1]];
+    drawArrow2d(ctx2d, a.x, a.y, b.x, b.y, 'rgba(0,229,255,.5)');
+  }
+
+  // vertices
+  verts2d.forEach((v, i) => {
+    const isActive = step2dIdx >= 0 && step2dIdx < path.length && path[step2dIdx] === i;
+    const isVisited = false;
+
+    // glow
+    if (isActive) {
+      ctx2d.beginPath();
+      ctx2d.arc(v.x, v.y, 22, 0, Math.PI * 2);
+      ctx2d.fillStyle = 'rgba(0,229,255,.15)';
+      ctx2d.fill();
+    }
+
+    ctx2d.beginPath();
+    ctx2d.arc(v.x, v.y, 14, 0, Math.PI * 2);
+    ctx2d.fillStyle = isActive ? '#00e5ff' : '#1a2540';
+    ctx2d.fill();
+    ctx2d.strokeStyle = isActive ? '#00e5ff' : 'rgba(0,229,255,.4)';
+    ctx2d.lineWidth = 2;
+    ctx2d.stroke();
+
+    ctx2d.fillStyle = isActive ? '#0a0e17' : '#e0e6f0';
+    ctx2d.font = 'bold 13px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    ctx2d.textAlign = 'center';
+    ctx2d.textBaseline = 'middle';
+    ctx2d.fillText(v.label, v.x, v.y);
+  });
+
+  // corner labels
+  ctx2d.fillStyle = 'rgba(122,139,168,.4)';
+  ctx2d.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText('(0,0)', 100, 330);
+  ctx2d.fillText('(1,0)', 300, 330);
+  ctx2d.fillText('(1,1)', 300, 78);
+  ctx2d.fillText('(0,1)', 100, 78);
+
+  // title
+  ctx2d.fillStyle = 'rgba(122,139,168,.6)';
+  ctx2d.font = '13px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+  ctx2d.textAlign = 'center';
+  ctx2d.fillText(mode2d === 'gray' ? '格雷码：沿棱行走' : '二进制：穿越对角线', W2 / 2, 30);
+}
+
+function drawArrow2d(ctx, x1, y1, x2, y2, color) {
+  const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const len = 8;
+  ctx.beginPath();
+  ctx.moveTo(mx, my);
+  ctx.lineTo(mx - len * Math.cos(angle - 0.4), my - len * Math.sin(angle - 0.4));
+  ctx.moveTo(mx, my);
+  ctx.lineTo(mx - len * Math.cos(angle + 0.4), my - len * Math.sin(angle + 0.4));
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+}
+
+draw2d();
+
+// ============================================================
+//  3D VISUALIZATION (Three.js)
+// ============================================================
+let scene3d, camera3d, renderer3d, cubeGroup3d;
+let playing3d = false, step3dIdx = 0, playTimer3d = null;
+let speed3dVal = 800;
+const labels3d = [];
+const graySeq3d = graySequence(3);
+const edgeLines3d = [];
+let pathLine3d = null;
+let currentDot3d = null;
+let dragState = { dragging: false, prevX: 0, prevY: 0, rotX: 0.5, rotY: -0.6 };
+
+function init3D() {
+  const canvas = document.getElementById('canvas3d');
+  const W = 600, H = 500;
+
+  scene3d = new THREE.Scene();
+  camera3d = new THREE.PerspectiveCamera(50, W / H, 0.1, 100);
+  camera3d.position.set(0, 0, 5);
+
+  // We'll render manually
+  renderer3d = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer3d.setSize(W, H);
+  renderer3d.setPixelRatio(window.devicePixelRatio);
+  renderer3d.setClearColor(0x0a0e17, 1);
+
+  cubeGroup3d = new THREE.Group();
+  scene3d.add(cubeGroup3d);
+
+  // vertices
+  const vPositions = [];
+  for (let i = 0; i < 8; i++) {
+    const x = ((i >> 2) & 1) * 2 - 1;
+    const y = ((i >> 1) & 1) * 2 - 1;
+    const z = (i & 1) * 2 - 1;
+    vPositions.push(new THREE.Vector3(x, y, z));
+  }
+
+  // sphere for each vertex
+  const sphereGeo = new THREE.SphereGeometry(0.1, 16, 16);
+  const sphereMat = new THREE.MeshBasicMaterial({ color: 0x1a2540 });
+  vPositions.forEach((pos, i) => {
+    const mesh = new THREE.Mesh(sphereGeo, sphereMat.clone());
+    mesh.position.copy(pos);
+    cubeGroup3d.add(mesh);
+  });
+
+  // edges
+  const edgeMat = new THREE.LineBasicMaterial({ color: 0x00e5ff, transparent: true, opacity: 0.12 });
+  for (let i = 0; i < 8; i++) {
+    for (let j = i + 1; j < 8; j++) {
+      if (hamming(i, j) === 1) {
+        const geo = new THREE.BufferGeometry().setFromPoints([vPositions[i], vPositions[j]]);
+        const line = new THREE.Line(geo, edgeMat.clone());
+        cubeGroup3d.add(line);
+        edgeLines3d.push({ line, from: i, to: j });
+      }
+    }
+  }
+
+  // path line (dynamic)
+  const pathGeo = new THREE.BufferGeometry();
+  const pathMat = new THREE.LineBasicMaterial({ color: 0x00e5ff, linewidth: 2 });
+  pathLine3d = new THREE.Line(pathGeo, pathMat);
+  cubeGroup3d.add(pathLine3d);
+
+  // current position dot
+  const dotGeo = new THREE.SphereGeometry(0.15, 16, 16);
+  const dotMat = new THREE.MeshBasicMaterial({ color: 0x00e5ff });
+  currentDot3d = new THREE.Mesh(dotGeo, dotMat);
+  currentDot3d.visible = false;
+  cubeGroup3d.add(currentDot3d);
+
+  // labels (sprites)
+  const fontMono = getComputedStyle(document.body).getPropertyValue('--mono').trim();
+  for (let i = 0; i < 8; i++) {
+    const sprite = makeTextSprite(toBits(i, 3), {
+      fontsize: 22,
+      fontface: fontMono || 'monospace',
+      color: 'rgba(224,230,240,.7)',
+      bgColor: 'rgba(10,14,23,.6)',
+    });
+    const offset = vPositions[i].clone().normalize().multiplyScalar(0.3);
+    sprite.position.copy(vPositions[i]).add(offset);
+    sprite.scale.set(0.8, 0.4, 1);
+    cubeGroup3d.add(sprite);
+    labels3d.push(sprite);
+  }
+
+  // lighting
+  scene3d.add(new THREE.AmbientLight(0xffffff, 1));
+
+  // mouse drag
+  canvas.addEventListener('mousedown', e => {
+    dragState.dragging = true;
+    dragState.prevX = e.clientX;
+    dragState.prevY = e.clientY;
+  });
+  canvas.addEventListener('mousemove', e => {
+    if (!dragState.dragging) return;
+    dragState.rotY += (e.clientX - dragState.prevX) * 0.008;
+    dragState.rotX += (e.clientY - dragState.prevY) * 0.008;
+    dragState.prevX = e.clientX;
+    dragState.prevY = e.clientY;
+  });
+  canvas.addEventListener('mouseup', () => dragState.dragging = false);
+  canvas.addEventListener('mouseleave', () => dragState.dragging = false);
+
+  // touch drag
+  canvas.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) {
+      dragState.dragging = true;
+      dragState.prevX = e.touches[0].clientX;
+      dragState.prevY = e.touches[0].clientY;
+    }
+  });
+  canvas.addEventListener('touchmove', e => {
+    if (!dragState.dragging || e.touches.length !== 1) return;
+    e.preventDefault();
+    dragState.rotY += (e.touches[0].clientX - dragState.prevX) * 0.008;
+    dragState.rotX += (e.touches[0].clientY - dragState.prevY) * 0.008;
+    dragState.prevX = e.touches[0].clientX;
+    dragState.prevY = e.touches[0].clientY;
+  }, { passive: false });
+  canvas.addEventListener('touchend', () => dragState.dragging = false);
+
+  // populate sequence panel
+  buildSeq3dPanel();
+
+  // start render loop
+  animate3d();
+}
+
+function makeTextSprite(text, opts) {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  canvas.width = 128;
+  canvas.height = 64;
+
+  ctx.fillStyle = opts.bgColor || 'transparent';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.font = `bold ${opts.fontsize || 20}px ${opts.fontface || 'monospace'}`;
+  ctx.fillStyle = opts.color || '#fff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+
+  const tex = new THREE.CanvasTexture(canvas);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true });
+  return new THREE.Sprite(mat);
+}
+
+function buildSeq3dPanel() {
+  const el = document.getElementById('seq3d');
+  let html = '';
+  for (let i = 0; i < 8; i++) {
+    const g = graySeq3d[i];
+    const b = i;
+    html += `<div class="seq-item" id="seq3d-${i}">`;
+    html += `<span class="idx">${i}</span>`;
+    html += `<span class="arrow">→</span>`;
+    html += `<span>${toBits(g, 3)}</span>`;
+    html += `<span style="color:var(--muted);margin-left:auto;font-size:.75rem">B=${toBits(b,3)}</span>`;
+    html += `</div>`;
+  }
+  el.innerHTML = html;
+}
+
+function update3dPath() {
+  const vPositions = [];
+  for (let i = 0; i < 8; i++) {
+    const x = ((i >> 2) & 1) * 2 - 1;
+    const y = ((i >> 1) & 1) * 2 - 1;
+    const z = (i & 1) * 2 - 1;
+    vPositions.push(new THREE.Vector3(x, y, z));
+  }
+
+  const points = [];
+  for (let i = 0; i <= step3dIdx && i < 8; i++) {
+    points.push(vPositions[graySeq3d[i]]);
+  }
+
+  pathLine3d.geometry.dispose();
+  pathLine3d.geometry = new THREE.BufferGeometry().setFromPoints(points);
+
+  if (step3dIdx >= 0 && step3dIdx < 8) {
+    currentDot3d.visible = true;
+    currentDot3d.position.copy(vPositions[graySeq3d[step3dIdx]]);
+  }
+
+  // highlight current vertex sphere
+  cubeGroup3d.children.forEach((child, idx) => {
+    if (child instanceof THREE.Mesh && child.geometry.type === 'SphereGeometry' && child !== currentDot3d) {
+      const vIdx = idx; // spheres are first 8 children
+      if (vIdx < 8 && vIdx === (step3dIdx >= 0 && step3dIdx < 8 ? graySeq3d[step3dIdx] : -1)) {
+        child.material.color.setHex(0x00e5ff);
+      } else {
+        child.material.color.setHex(0x1a2540);
+      }
+    }
+  });
+
+  // highlight edges
+  edgeLines3d.forEach(e => {
+    let onPath = false;
+    for (let i = 0; i < step3dIdx && i < 7; i++) {
+      const a = graySeq3d[i], b = graySeq3d[i + 1];
+      if ((e.from === a && e.to === b) || (e.from === b && e.to === a)) {
+        onPath = true;
+        break;
+      }
+    }
+    e.line.material.opacity = onPath ? 0.6 : 0.12;
+    e.line.material.color.setHex(onPath ? 0x00e5ff : 0x00e5ff);
+  });
+
+  // sequence panel highlight
+  for (let i = 0; i < 8; i++) {
+    const el = document.getElementById(`seq3d-${i}`);
+    if (el) el.classList.toggle('active', i === step3dIdx);
+  }
+
+  // formula display
+  updateFormula3d();
+}
+
+function updateFormula3d() {
+  const el = document.getElementById('formula3d');
+  if (step3dIdx < 0 || step3dIdx >= 8) {
+    el.innerHTML = '等待播放...';
+    return;
+  }
+  const B = step3dIdx;
+  const Bsr = B >> 1;
+  const G = B ^ Bsr;
+  el.innerHTML =
+    `B = <span class="val">${toBits(B, 3)}</span> (${B})<br>` +
+    `B >> 1 = <span class="val">${toBits(Bsr, 3)}</span><br>` +
+    `B ⊕ (B>>1) = <span class="xor-result">${toBits(G, 3)}</span> (${G})`;
+}
+
+function toggle3dPlay() {
+  if (playing3d) {
+    playing3d = false;
+    clearInterval(playTimer3d);
+    document.getElementById('btn3dPlay').textContent = '▶ 播放动画';
+    return;
+  }
+  playing3d = true;
+  step3dIdx = -1;
+  document.getElementById('btn3dPlay').textContent = '⏸ 暂停';
+
+  playTimer3d = setInterval(() => {
+    step3dIdx++;
+    if (step3dIdx >= 8) {
+      // loop: also show closing edge then reset
+      step3dIdx = 0;
+    }
+    update3dPath();
+  }, speed3dVal);
+}
+
+function animate3d() {
+  requestAnimationFrame(animate3d);
+  cubeGroup3d.rotation.x = dragState.rotX;
+  cubeGroup3d.rotation.y = dragState.rotY;
+  renderer3d.render(scene3d, camera3d);
+}
+
+init3D();
+
+// ============================================================
+//  MIRROR CONSTRUCTION
+// ============================================================
+const canvasMirror = document.getElementById('canvasMirror');
+const ctxM = canvasMirror.getContext('2d');
+const WM = 600, HM = 380;
+
+const mirrorStates = [
+  {
+    title: '1位格雷码',
+    items: [{ text: '0', x: 200, color: 'cyan' }, { text: '1', x: 400, color: 'cyan' }],
+    arrow: null,
+    desc: '最基础：只有 0 和 1',
+  },
+  {
+    title: '复制一份',
+    items: [
+      { text: '0', x: 120, color: 'cyan' },
+      { text: '1', x: 220, color: 'cyan' },
+      { text: '0', x: 380, color: 'muted' },
+      { text: '1', x: 480, color: 'muted' },
+    ],
+    arrow: null,
+    desc: '把序列复制一份，准备翻转',
+  },
+  {
+    title: '后半翻转（镜像）',
+    items: [
+      { text: '0', x: 120, color: 'cyan' },
+      { text: '1', x: 220, color: 'cyan' },
+      { text: '1', x: 380, color: 'gold' },
+      { text: '0', x: 480, color: 'gold' },
+    ],
+    arrow: { from: 380, to: 480 },
+    desc: '后半反转：1,0 → 让拼接处只变 1 位',
+  },
+  {
+    title: '前半补 0，后半补 1',
+    items: [
+      { text: '00', x: 120, color: 'cyan' },
+      { text: '01', x: 220, color: 'cyan' },
+      { text: '11', x: 380, color: 'gold' },
+      { text: '10', x: 480, color: 'gold' },
+    ],
+    arrow: { from: 220, to: 380 },
+    desc: '补最高位：拼接处 01→11 只变 1 位 ✓',
+  },
+  {
+    title: '首尾相连成环',
+    items: [
+      { text: '00', x: 120, color: 'cyan' },
+      { text: '01', x: 220, color: 'cyan' },
+      { text: '11', x: 380, color: 'gold' },
+      { text: '10', x: 480, color: 'gold' },
+    ],
+    arrow: { from: 220, to: 380 },
+    closingArrow: true,
+    desc: '末尾 10→00 也只变 1 位 → 哈密顿环 ✓',
+  },
+];
+
+let mirrorStep = -1;
+let mirrorAutoTimer = null;
+
+function buildMirrorSteps() {
+  const el = document.getElementById('mirrorSteps');
+  let html = '';
+  mirrorStates.forEach((s, i) => {
+    html += `<div class="step" id="mstep-${i}" onclick="setMirrorStep(${i})">`;
+    html += `<span class="num">${i + 1}</span> ${s.title}`;
+    html += `</div>`;
+  });
+  el.innerHTML = html;
+}
+
+function setMirrorStep(idx) {
+  mirrorStep = idx;
+  drawMirror();
+  // update step highlights
+  mirrorStates.forEach((_, i) => {
+    const el = document.getElementById(`mstep-${i}`);
+    if (el) el.classList.toggle('active', i === idx);
+  });
+}
+
+function mirrorAutoPlay() {
+  if (mirrorAutoTimer) {
+    clearInterval(mirrorAutoTimer);
+    mirrorAutoTimer = null;
+    return;
+  }
+  mirrorStep = -1;
+  mirrorAutoTimer = setInterval(() => {
+    mirrorStep++;
+    if (mirrorStep >= mirrorStates.length) {
+      clearInterval(mirrorAutoTimer);
+      mirrorAutoTimer = null;
+      return;
+    }
+    setMirrorStep(mirrorStep);
+  }, 1200);
+}
+
+function drawMirror() {
+  ctxM.clearRect(0, 0, WM, HM);
+
+  if (mirrorStep < 0) {
+    ctxM.fillStyle = 'rgba(122,139,168,.5)';
+    ctxM.font = '15px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+    ctxM.textAlign = 'center';
+    ctxM.fillText('点击右侧步骤或「自动播放」', WM / 2, HM / 2);
+    return;
+  }
+
+  const state = mirrorStates[mirrorStep];
+
+  // title
+  ctxM.fillStyle = 'rgba(122,139,168,.6)';
+  ctxM.font = '13px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+  ctxM.textAlign = 'center';
+  ctxM.fillText(state.title, WM / 2, 35);
+
+  // divider line between halves
+  ctxM.beginPath();
+  ctxM.setLineDash([4, 4]);
+  ctxM.moveTo(WM / 2, 55);
+  ctxM.lineTo(WM / 2, 280);
+  ctxM.strokeStyle = 'rgba(122,139,168,.2)';
+  ctxM.lineWidth = 1;
+  ctxM.stroke();
+  ctxM.setLineDash([]);
+
+  // labels
+  ctxM.fillStyle = 'rgba(122,139,168,.35)';
+  ctxM.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+  ctxM.fillText('前半（补0）', WM / 4, 55);
+  ctxM.fillText('后半（补1，镜像）', WM * 3 / 4, 55);
+
+  // items
+  const y = 160;
+  state.items.forEach(item => {
+    const color = item.color === 'cyan' ? '#00e5ff' : item.color === 'gold' ? '#ffd740' : '#7a8ba8';
+    const bg = item.color === 'cyan' ? 'rgba(0,229,255,.1)' : item.color === 'gold' ? 'rgba(255,215,64,.1)' : 'rgba(122,139,168,.08)';
+
+    // box
+    ctxM.fillStyle = bg;
+    ctxM.strokeStyle = color;
+    ctxM.lineWidth = 1.5;
+    const bw = 52, bh = 42;
+    roundRect(ctxM, item.x - bw / 2, y - bh / 2, bw, bh, 8);
+    ctxM.fill();
+    ctxM.stroke();
+
+    // text
+    ctxM.fillStyle = color;
+    ctxM.font = 'bold 16px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    ctxM.textAlign = 'center';
+    ctxM.textBaseline = 'middle';
+    ctxM.fillText(item.text, item.x, y);
+  });
+
+  // arrow between halves (connection point)
+  if (state.arrow) {
+    const ax = state.arrow.from + 30;
+    const bx = state.arrow.to - 30;
+    ctxM.beginPath();
+    ctxM.moveTo(ax, y);
+    ctxM.lineTo(bx, y);
+    ctxM.strokeStyle = 'rgba(0,229,255,.4)';
+    ctxM.lineWidth = 2;
+    ctxM.stroke();
+    // arrowhead
+    ctxM.beginPath();
+    ctxM.moveTo(bx, y);
+    ctxM.lineTo(bx - 8, y - 5);
+    ctxM.lineTo(bx - 8, y + 5);
+    ctxM.closePath();
+    ctxM.fillStyle = 'rgba(0,229,255,.4)';
+    ctxM.fill();
+
+    // hamming label
+    ctxM.fillStyle = '#69f0ae';
+    ctxM.font = 'bold 11px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    ctxM.textAlign = 'center';
+    ctxM.fillText('hamming=1 ✓', (ax + bx) / 2, y - 28);
+  }
+
+  // closing arrow (ring)
+  if (state.closingArrow) {
+    const last = state.items[state.items.length - 1];
+    const first = state.items[0];
+    ctxM.beginPath();
+    ctxM.moveTo(last.x + 30, y + 20);
+    ctxM.bezierCurveTo(last.x + 30, y + 80, first.x - 30, y + 80, first.x - 30, y + 20);
+    ctxM.strokeStyle = 'rgba(105,240,174,.4)';
+    ctxM.lineWidth = 2;
+    ctxM.stroke();
+
+    ctxM.fillStyle = '#69f0ae';
+    ctxM.font = 'bold 11px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    ctxM.textAlign = 'center';
+    ctxM.fillText('10→00 hamming=1 ✓ → 回到起点', WM / 2, y + 75);
+  }
+
+  // description
+  ctxM.fillStyle = 'rgba(122,139,168,.7)';
+  ctxM.font = '13px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+  ctxM.textAlign = 'center';
+  ctxM.fillText(state.desc, WM / 2, HM - 30);
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+buildMirrorSteps();
+drawMirror();
+
+// ============================================================
+//  INTERACTIVE EXPLORER
+// ============================================================
+const canvasInt = document.getElementById('canvasInteractive');
+const ctxInt = canvasInt.getContext('2d');
+const WI = 480, HI = 480;
+
+function updateInteractive() {
+  const n = parseInt(document.getElementById('nSlider').value);
+  document.getElementById('nVal').textContent = n;
+
+  const seq = graySequence(n);
+  const len = seq.length;
+
+  // build table
+  let tableHtml = '<table><thead><tr><th>B (十进制)</th><th>B (二进制)</th><th>G (格雷码)</th><th>汉明距离</th></tr></thead><tbody>';
+  let allOk = true;
+  for (let i = 0; i < len; i++) {
+    const b = i;
+    const g = seq[i];
+    let hd = '';
+    if (i > 0) {
+      const h = hamming(seq[i - 1], seq[i]);
+      hd = `<span class="hamming-ok">${h}</span>`;
+      if (h !== 1) allOk = false;
+    } else {
+      hd = '-';
+    }
+    tableHtml += `<tr><td>${b}</td><td>${toBits(b, n)}</td><td>${toBits(g, n)}</td><td>${hd}</td></tr>`;
+  }
+  // closing edge
+  const hClose = hamming(seq[len - 1], seq[0]);
+  tableHtml += `<tr><td colspan="3" style="color:var(--muted)">末→首</td><td><span class="hamming-ok">${hClose}</span></td></tr>`;
+  tableHtml += '</tbody></table>';
+  document.getElementById('grayTable').innerHTML = tableHtml;
+
+  // hamming verify
+  const verifyEl = document.getElementById('hammingVerify');
+  if (allOk && hClose === 1) {
+    verifyEl.innerHTML = `<span class="ok">✓ 验证通过</span> — 所有相邻编码（含首尾）汉明距离均为 1，构成${n}维超立方体 Q<sub>${n}</sub> 上的哈密顿环。<br><span class="detail">共 ${len} 个顶点，${len} 条边</span>`;
+  } else {
+    verifyEl.innerHTML = `<span style="color:var(--red)">✗ 验证失败</span>`;
+  }
+
+  // draw hypercube projection
+  drawHypercubeProjection(n, seq);
+}
+
+function drawHypercubeProjection(n, seq) {
+  ctxInt.clearRect(0, 0, WI, HI);
+
+  const cx = WI / 2, cy = HI / 2;
+  const radius = Math.min(WI, HI) * 0.38;
+
+  // project n-bit vertices to 2D using circular layout
+  const positions = [];
+  const len = 1 << n;
+
+  for (let i = 0; i < len; i++) {
+    // Use a nice layout: arrange vertices in a circle for small n,
+    // or use hypercube projection for larger n
+    if (n <= 4) {
+      // circle layout with some structure
+      const angle = (i / len) * Math.PI * 2 - Math.PI / 2;
+      // for better visualization, spread Gray code vertices on circle
+      positions.push(null); // placeholder
+    } else {
+      positions.push(null);
+    }
+  }
+
+  // Better approach: use Gray code order on a circle
+  const grayPositions = new Array(len);
+  for (let i = 0; i < len; i++) {
+    const angle = (i / len) * Math.PI * 2 - Math.PI / 2;
+    grayPositions[seq[i]] = {
+      x: cx + radius * Math.cos(angle),
+      y: cy + radius * Math.sin(angle),
+    };
+  }
+
+  // Draw ALL hypercube edges (faint)
+  for (let i = 0; i < len; i++) {
+    for (let j = i + 1; j < len; j++) {
+      if (hamming(i, j) === 1) {
+        ctxInt.beginPath();
+        ctxInt.moveTo(grayPositions[i].x, grayPositions[i].y);
+        ctxInt.lineTo(grayPositions[j].x, grayPositions[j].y);
+        ctxInt.strokeStyle = 'rgba(0,229,255,.06)';
+        ctxInt.lineWidth = 1;
+        ctxInt.stroke();
+      }
+    }
+  }
+
+  // Draw Hamiltonian cycle (bright)
+  for (let i = 0; i < len; i++) {
+    const a = seq[i], b = seq[(i + 1) % len];
+    ctxInt.beginPath();
+    ctxInt.moveTo(grayPositions[a].x, grayPositions[a].y);
+    ctxInt.lineTo(grayPositions[b].x, grayPositions[b].y);
+    ctxInt.strokeStyle = 'rgba(0,229,255,.5)';
+    ctxInt.lineWidth = 2;
+    ctxInt.stroke();
+
+    // arrow
+    const mx = (grayPositions[a].x + grayPositions[b].x) / 2;
+    const my = (grayPositions[a].y + grayPositions[b].y) / 2;
+    const angle = Math.atan2(
+      grayPositions[b].y - grayPositions[a].y,
+      grayPositions[b].x - grayPositions[a].x
+    );
+    ctxInt.beginPath();
+    ctxInt.moveTo(mx, my);
+    ctxInt.lineTo(mx - 7 * Math.cos(angle - 0.4), my - 7 * Math.sin(angle - 0.4));
+    ctxInt.moveTo(mx, my);
+    ctxInt.lineTo(mx - 7 * Math.cos(angle + 0.4), my - 7 * Math.sin(angle + 0.4));
+    ctxInt.strokeStyle = 'rgba(0,229,255,.35)';
+    ctxInt.lineWidth = 1.5;
+    ctxInt.stroke();
+  }
+
+  // Draw vertices
+  const nodeRadius = n <= 4 ? 16 : n <= 5 ? 12 : 8;
+  const fontSize = n <= 4 ? 12 : n <= 5 ? 10 : 8;
+  const fontMono = getComputedStyle(document.body).getPropertyValue('--mono').trim();
+
+  for (let i = 0; i < len; i++) {
+    const pos = grayPositions[i];
+
+    // glow
+    ctxInt.beginPath();
+    ctxInt.arc(pos.x, pos.y, nodeRadius + 4, 0, Math.PI * 2);
+    ctxInt.fillStyle = 'rgba(0,229,255,.05)';
+    ctxInt.fill();
+
+    // circle
+    ctxInt.beginPath();
+    ctxInt.arc(pos.x, pos.y, nodeRadius, 0, Math.PI * 2);
+    ctxInt.fillStyle = '#1a2540';
+    ctxInt.fill();
+    ctxInt.strokeStyle = 'rgba(0,229,255,.35)';
+    ctxInt.lineWidth = 1.5;
+    ctxInt.stroke();
+
+    // label
+    ctxInt.fillStyle = '#e0e6f0';
+    ctxInt.font = `bold ${fontSize}px ${fontMono}`;
+    ctxInt.textAlign = 'center';
+    ctxInt.textBaseline = 'middle';
+    ctxInt.fillText(toBits(i, n), pos.x, pos.y);
+  }
+
+  // title
+  ctxInt.fillStyle = 'rgba(122,139,168,.5)';
+  ctxInt.font = '12px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+  ctxInt.textAlign = 'center';
+  ctxInt.fillText(`Q${n} 超立方体 — 哈密顿环（格雷码序）`, cx, 25);
+}
+
+updateInteractive();
+
+// ============================================================
+//  NAV HIGHLIGHT ON SCROLL
+// ============================================================
+const sections = ['top', 'sec-2d', 'sec-3d', 'sec-mirror', 'sec-interactive'];
+const navLinks = document.querySelectorAll('nav a');
+
+function updateNav() {
+  let current = 0;
+  const scrollY = window.scrollY + 100;
+  sections.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el && el.offsetTop <= scrollY) current = i;
+  });
+  navLinks.forEach((a, i) => a.classList.toggle('active', i === current));
+}
+window.addEventListener('scroll', updateNav);
+updateNav();
+
+// ============================================================
+//  CHALLENGES: 三维哈密顿环实验室
+// ============================================================
+
+const chCanvas = document.getElementById('canvasChallenge');
+const chCtx = chCanvas.getContext('2d');
+const CW = 560, CH = 500;
+const chCx = CW / 2, chCy = CH / 2;
+
+// Cube vertices — oblique 3D projection for clear depth
+// Front face (bit2=0): left square
+// Back face (bit2=1): shifted right + up
+const CH_VERTS = [
+  { id: 0, label: '000', x: 110, y: 390 },  // front-bottom-left
+  { id: 1, label: '001', x: 310, y: 390 },  // front-bottom-right
+  { id: 2, label: '010', x: 110, y: 210 },  // front-top-left
+  { id: 3, label: '011', x: 310, y: 210 },  // front-top-right
+  { id: 4, label: '100', x: 230, y: 330 },  // back-bottom-left
+  { id: 5, label: '101', x: 430, y: 330 },  // back-bottom-right
+  { id: 6, label: '110', x: 230, y: 150 },  // back-top-left
+  { id: 7, label: '111', x: 430, y: 150 },  // back-top-right
+];
+
+// All 12 edges
+const CH_ALL_EDGES = [
+  // Front face (4 edges)
+  [0,1],[0,2],[1,3],[2,3],
+  // Back face (4 edges)
+  [4,5],[4,6],[5,7],[6,7],
+  // Connecting edges (4 edges)
+  [0,4],[1,5],[2,6],[3,7],
+];
+
+// Edge midpoint for click detection
+function chEdgeKey(a, b) { return a < b ? a * 10 + b : b * 10 + a; }
+function chEdgeFromKey(k) { return [Math.floor(k / 10), k % 10]; }
+
+// Build edge lookup
+const CH_EDGE_MAP = {};
+CH_ALL_EDGES.forEach(([a, b]) => {
+  CH_EDGE_MAP[chEdgeKey(a, b)] = [a, b];
+});
+
+// Level configurations
+const CH_LEVELS = [
+  {
+    name: '第一关：补全环',
+    desc: '<strong>任务：</strong>系统预选了 2 条边，你需要选出剩余的边，构成一个经过全部 8 个顶点的哈密顿环。<br><br>点击边来选中/取消。每个顶点必须恰好有 2 条选中的边。',
+    forbidden: [],
+    required: [],
+    preSelected: [[0,2], [1,5]],
+    weights: null,
+    type: 'complete',
+  },
+  {
+    name: '第二关：受限环',
+    desc: '<strong>任务：</strong>两条边被禁止（红色），选出一个哈密顿环。<br><br>禁止边不能使用。注意：约束把路径逼向了特定方向。',
+    forbidden: [[0,2], [1,5]],
+    required: [],
+    preSelected: [],
+    weights: null,
+    type: 'constrained',
+  },
+  {
+    name: '第三关：有解还是无解？',
+    desc: '<strong>任务：</strong>三条边被禁止。判断：<strong>存在</strong>哈密顿环，还是<strong>不存在</strong>？<br><br>如果不存在，选择正确的理由。',
+    forbidden: [[0,1], [0,2], [0,4]],
+    required: [],
+    preSelected: [],
+    weights: null,
+    type: 'impossible',
+  },
+  {
+    name: '第四关：最优环',
+    desc: '<strong>任务：</strong>每条边有不同代价（金色数字）。找到总代价最小的哈密顿环。<br><br>先找到任意合法环，再尝试优化。',
+    forbidden: [],
+    required: [],
+    preSelected: [],
+    weights: {
+      '0-1': 2, '0-2': 7, '0-4': 3,
+      '1-3': 5, '1-5': 1,
+      '2-3': 2, '2-6': 6,
+      '3-7': 3,
+      '4-5': 4, '4-6': 1,
+      '5-7': 8,
+      '6-7': 2,
+    },
+    type: 'optimal',
+  },
+];
+
+let chCurrentLevel = 0;
+let chSelected = new Set(); // selected edge keys
+let chForced = new Set();   // required/pre-selected edge keys (cannot be removed)
+let chForbidden = new Set();
+let chCompleted = [false, false, false, false];
+let chFeedbackTimer = null;
+
+function chEdgeWeight(a, b) {
+  const lvl = CH_LEVELS[chCurrentLevel];
+  if (!lvl.weights) return null;
+  const k1 = a + '-' + b, k2 = b + '-' + a;
+  return lvl.weights[k1] ?? lvl.weights[k2] ?? null;
+}
+
+function chLoadLevel(idx) {
+  chCurrentLevel = idx;
+  const lvl = CH_LEVELS[idx];
+
+  // Update level nav
+  document.querySelectorAll('.ch-level-btn').forEach((b, i) => {
+    b.classList.toggle('active', i === idx);
+    b.classList.toggle('completed', chCompleted[i]);
+  });
+
+  // Description
+  document.getElementById('chDesc').innerHTML = lvl.desc;
+
+  // Legend
+  let legendHtml = '';
+  legendHtml += '<div class="ch-legend-item"><div class="ch-legend-swatch" style="background:rgba(0,229,255,.2)"></div>可选</div>';
+  legendHtml += '<div class="ch-legend-item"><div class="ch-legend-swatch" style="background:#00e5ff"></div>已选中</div>';
+  if (lvl.forbidden.length) {
+    legendHtml += '<div class="ch-legend-item"><div class="ch-legend-swatch" style="background:#ff5252"></div>禁止</div>';
+  }
+  if (lvl.required.length || lvl.preSelected.length) {
+    legendHtml += '<div class="ch-legend-item"><div class="ch-legend-swatch" style="background:#ffd740"></div>固定</div>';
+  }
+  if (lvl.weights) {
+    legendHtml += '<div class="ch-legend-item"><span style="color:var(--gold);font-family:var(--mono);font-size:.75rem">数字=代价</span></div>';
+  }
+  document.getElementById('chLegend').innerHTML = legendHtml;
+
+  // Reset selections
+  chSelected = new Set();
+  chForced = new Set();
+  chForbidden = new Set();
+
+  lvl.forbidden.forEach(([a, b]) => chForbidden.add(chEdgeKey(a, b)));
+  lvl.required.forEach(([a, b]) => {
+    const k = chEdgeKey(a, b);
+    chSelected.add(k);
+    chForced.add(k);
+  });
+  lvl.preSelected.forEach(([a, b]) => {
+    const k = chEdgeKey(a, b);
+    chSelected.add(k);
+    chForced.add(k);
+  });
+
+  // Actions
+  let actHtml = '';
+  if (lvl.type === 'impossible') {
+    actHtml += '<button class="ch-action-btn primary" onclick="chSubmitAnswer(true)">存在哈密顿环</button>';
+    actHtml += '<button class="ch-action-btn danger" onclick="chSubmitAnswer(false)">不存在</button>';
+  } else {
+    actHtml += '<button class="ch-action-btn primary" onclick="chSubmit()">提交验证</button>';
+    actHtml += '<button class="ch-action-btn" onclick="chClearSelection()">清空选择</button>';
+  }
+  document.getElementById('chActions').innerHTML = actHtml;
+
+  // Clear feedback
+  const fb = document.getElementById('chFeedback');
+  fb.className = 'ch-feedback hidden';
+  fb.innerHTML = '';
+
+  // Hide discovery
+  document.getElementById('chDiscovery').style.display = 'none';
+
+  // Stats
+  chUpdateStats();
+  chDraw();
+}
+
+function chUpdateStats() {
+  const lvl = CH_LEVELS[chCurrentLevel];
+  const el = document.getElementById('chStats');
+  const sel = chSelected.size;
+  const total = CH_ALL_EDGES.length;
+  const forbidden = chForbidden.size;
+
+  let html = `已选边: <span class="val">${sel}</span> / ${total - forbidden} 可用<br>`;
+
+  // Per-vertex degree
+  const deg = new Array(8).fill(0);
+  chSelected.forEach(k => {
+    const [a, b] = chEdgeFromKey(k);
+    deg[a]++;
+    deg[b]++;
+  });
+
+  let allDeg2 = true;
+  for (let i = 0; i < 8; i++) {
+    if (deg[i] !== 2) allDeg2 = false;
+  }
+
+  if (sel > 0) {
+    const degStr = deg.map((d, i) => {
+      const cls = d === 2 ? 'ok' : d > 2 ? 'bad' : '';
+      return `<span class="${cls}">${CH_VERTS[i].label}:${d}</span>`;
+    }).join(' ');
+    html += `度数: ${degStr}<br>`;
+  }
+
+  if (lvl.weights) {
+    let totalCost = 0;
+    chSelected.forEach(k => {
+      const [a, b] = chEdgeFromKey(k);
+      const w = chEdgeWeight(a, b);
+      if (w !== null) totalCost += w;
+    });
+    html += `总代价: <span class="val">${totalCost}</span>`;
+  }
+
+  el.innerHTML = html;
+}
+
+function chClearSelection() {
+  // Remove all except forced
+  chSelected = new Set(chForced);
+  const fb = document.getElementById('chFeedback');
+  fb.className = 'ch-feedback hidden';
+  chUpdateStats();
+  chDraw();
+}
+
+function chShowFeedback(msg, type) {
+  const fb = document.getElementById('chFeedback');
+  fb.innerHTML = msg;
+  fb.className = 'ch-feedback ' + type;
+  clearTimeout(chFeedbackTimer);
+}
+
+// ---- Click detection ----
+chCanvas.addEventListener('click', function(e) {
+  const rect = chCanvas.getBoundingClientRect();
+  const scaleX = CW / rect.width;
+  const scaleY = CH / rect.height;
+  const mx = (e.clientX - rect.left) * scaleX;
+  const my = (e.clientY - rect.top) * scaleY;
+
+  // Find nearest edge
+  let bestDist = 20; // max click distance from edge
+  let bestKey = null;
+
+  CH_ALL_EDGES.forEach(([a, b]) => {
+    const k = chEdgeKey(a, b);
+    if (chForbidden.has(k)) return;
+    if (chForced.has(k)) return;
+
+    const va = CH_VERTS[a], vb = CH_VERTS[b];
+    const dist = pointToSegDist(mx, my, va.x, va.y, vb.x, vb.y);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestKey = k;
+    }
+  });
+
+  if (bestKey !== null) {
+    if (chSelected.has(bestKey)) {
+      chSelected.delete(bestKey);
+    } else {
+      chSelected.add(bestKey);
+    }
+    const fb = document.getElementById('chFeedback');
+    fb.className = 'ch-feedback hidden';
+    chUpdateStats();
+    chDraw();
+  }
+});
+
+function pointToSegDist(px, py, x1, y1, x2, y2) {
+  const dx = x2 - x1, dy = y2 - y1;
+  const lenSq = dx * dx + dy * dy;
+  if (lenSq === 0) return Math.hypot(px - x1, py - y1);
+  let t = ((px - x1) * dx + (py - y1) * dy) / lenSq;
+  t = Math.max(0, Math.min(1, t));
+  const nx = x1 + t * dx, ny = y1 + t * dy;
+  return Math.hypot(px - nx, py - ny);
+}
+
+// ---- Drawing ----
+function chDraw() {
+  chCtx.clearRect(0, 0, CW, CH);
+  const lvl = CH_LEVELS[chCurrentLevel];
+
+  // Background gradient
+  const bgGrad = chCtx.createRadialGradient(chCx, chCy, 0, chCx, chCy, 300);
+  bgGrad.addColorStop(0, 'rgba(0,229,255,.03)');
+  bgGrad.addColorStop(1, 'transparent');
+  chCtx.fillStyle = bgGrad;
+  chCtx.fillRect(0, 0, CW, CH);
+
+  // Title
+  chCtx.fillStyle = 'rgba(122,139,168,.35)';
+  chCtx.font = '11px ' + getComputedStyle(document.body).getPropertyValue('--sans');
+  chCtx.textAlign = 'center';
+  chCtx.fillText('点击边来选中/取消', CW / 2, 25);
+
+  // Draw edges grouped by type for proper layering
+  // 1. Draw all available (unselected) edges first (faint)
+  CH_ALL_EDGES.forEach(function(pair) {
+    var a = pair[0], b = pair[1];
+    var va = CH_VERTS[a], vb = CH_VERTS[b];
+    var k = chEdgeKey(a, b);
+
+    if (chForbidden.has(k) || chForced.has(k) || chSelected.has(k)) return;
+
+    // Subtle edge shadow
+    chCtx.beginPath();
+    chCtx.moveTo(va.x, va.y);
+    chCtx.lineTo(vb.x, vb.y);
+    chCtx.strokeStyle = 'rgba(0,229,255,.06)';
+    chCtx.lineWidth = 6;
+    chCtx.stroke();
+
+    // Edge line
+    chCtx.beginPath();
+    chCtx.moveTo(va.x, va.y);
+    chCtx.lineTo(vb.x, vb.y);
+    chCtx.strokeStyle = 'rgba(0,229,255,.15)';
+    chCtx.lineWidth = 1.5;
+    chCtx.stroke();
+  });
+
+  // 2. Draw connecting edges (back-face depth) with dashed style for depth
+  CH_ALL_EDGES.forEach(function(pair) {
+    var a = pair[0], b = pair[1];
+    // Connecting edges differ in bit2 only (0↔4, 1↔5, 2↔6, 3↔7)
+    var isConnecting = ((a ^ b) === 4);
+    if (!isConnecting) return;
+
+    var va = CH_VERTS[a], vb = CH_VERTS[b];
+    var k = chEdgeKey(a, b);
+    if (chForbidden.has(k) || chForced.has(k) || chSelected.has(k)) return;
+
+    chCtx.beginPath();
+    chCtx.setLineDash([6, 4]);
+    chCtx.moveTo(va.x, va.y);
+    chCtx.lineTo(vb.x, vb.y);
+    chCtx.strokeStyle = 'rgba(0,229,255,.1)';
+    chCtx.lineWidth = 1;
+    chCtx.stroke();
+    chCtx.setLineDash([]);
+  });
+
+  // 3. Draw forbidden edges
+  CH_ALL_EDGES.forEach(function(pair) {
+    var a = pair[0], b = pair[1];
+    var va = CH_VERTS[a], vb = CH_VERTS[b];
+    var k = chEdgeKey(a, b);
+    if (!chForbidden.has(k)) return;
+
+    // Red glow
+    chCtx.beginPath();
+    chCtx.moveTo(va.x, va.y);
+    chCtx.lineTo(vb.x, vb.y);
+    chCtx.strokeStyle = 'rgba(255,82,82,.15)';
+    chCtx.lineWidth = 8;
+    chCtx.stroke();
+
+    // Red dashed line
+    chCtx.beginPath();
+    chCtx.setLineDash([8, 5]);
+    chCtx.moveTo(va.x, va.y);
+    chCtx.lineTo(vb.x, vb.y);
+    chCtx.strokeStyle = 'rgba(255,82,82,.5)';
+    chCtx.lineWidth = 2.5;
+    chCtx.stroke();
+    chCtx.setLineDash([]);
+
+    // X mark
+    var mx = (va.x + vb.x) / 2, my = (va.y + vb.y) / 2;
+    chCtx.save();
+    chCtx.shadowColor = 'rgba(255,82,82,.4)';
+    chCtx.shadowBlur = 8;
+    chCtx.fillStyle = '#ff5252';
+    chCtx.font = 'bold 20px sans-serif';
+    chCtx.textAlign = 'center';
+    chCtx.textBaseline = 'middle';
+    chCtx.fillText('✗', mx, my);
+    chCtx.restore();
+  });
+
+  // 4. Draw forced/pre-selected edges (gold)
+  CH_ALL_EDGES.forEach(function(pair) {
+    var a = pair[0], b = pair[1];
+    var va = CH_VERTS[a], vb = CH_VERTS[b];
+    var k = chEdgeKey(a, b);
+    if (!chForced.has(k)) return;
+
+    // Gold glow
+    chCtx.beginPath();
+    chCtx.moveTo(va.x, va.y);
+    chCtx.lineTo(vb.x, vb.y);
+    chCtx.strokeStyle = 'rgba(255,215,64,.15)';
+    chCtx.lineWidth = 8;
+    chCtx.stroke();
+
+    // Gold line
+    chCtx.beginPath();
+    chCtx.moveTo(va.x, va.y);
+    chCtx.lineTo(vb.x, vb.y);
+    chCtx.strokeStyle = '#ffd740';
+    chCtx.lineWidth = 3;
+    chCtx.stroke();
+  });
+
+  // 5. Draw selected edges (cyan, on top)
+  CH_ALL_EDGES.forEach(function(pair) {
+    var a = pair[0], b = pair[1];
+    var va = CH_VERTS[a], vb = CH_VERTS[b];
+    var k = chEdgeKey(a, b);
+    if (!chSelected.has(k) || chForced.has(k)) return;
+
+    // Cyan glow
+    chCtx.beginPath();
+    chCtx.moveTo(va.x, va.y);
+    chCtx.lineTo(vb.x, vb.y);
+    chCtx.strokeStyle = 'rgba(0,229,255,.2)';
+    chCtx.lineWidth = 10;
+    chCtx.stroke();
+
+    // Cyan line
+    chCtx.beginPath();
+    chCtx.moveTo(va.x, va.y);
+    chCtx.lineTo(vb.x, vb.y);
+    chCtx.strokeStyle = '#00e5ff';
+    chCtx.lineWidth = 3.5;
+    chCtx.stroke();
+  });
+
+  // 6. Draw weight labels
+  CH_ALL_EDGES.forEach(function(pair) {
+    var a = pair[0], b = pair[1];
+    var w = chEdgeWeight(a, b);
+    if (w === null) return;
+
+    var va = CH_VERTS[a], vb = CH_VERTS[b];
+    var k = chEdgeKey(a, b);
+    var mx = (va.x + vb.x) / 2, my = (va.y + vb.y) / 2;
+    var dx = vb.x - va.x, dy = vb.y - va.y;
+    var len = Math.hypot(dx, dy);
+    var nx = -dy / len * 15, ny = dx / len * 15;
+
+    // Background pill
+    chCtx.fillStyle = chSelected.has(k) || chForced.has(k) ? 'rgba(255,215,64,.12)' : 'rgba(255,215,64,.06)';
+    var tw = chCtx.measureText(w.toString()).width + 10;
+    roundRectPath(chCtx, mx + nx - tw / 2, my + ny - 9, tw, 18, 4);
+    chCtx.fill();
+
+    chCtx.fillStyle = chSelected.has(k) || chForced.has(k) ? '#ffd740' : 'rgba(255,215,64,.5)';
+    chCtx.font = 'bold 12px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    chCtx.textAlign = 'center';
+    chCtx.textBaseline = 'middle';
+    chCtx.fillText(w.toString(), mx + nx, my + ny);
+  });
+
+  // 7. Draw vertices (on top of everything)
+  CH_VERTS.forEach(function(v, i) {
+    // Calculate degree
+    var deg = 0;
+    chSelected.forEach(function(k) {
+      var pair = chEdgeFromKey(k);
+      if (pair[0] === i || pair[1] === i) deg++;
+    });
+    chForced.forEach(function(k) {
+      var pair = chEdgeFromKey(k);
+      if (pair[0] === i || pair[1] === i) deg++;
+    });
+
+    var isOverDeg = deg > 2;
+    var isExactDeg = deg === 2;
+
+    // Outer glow
+    if (isExactDeg) {
+      var glow = chCtx.createRadialGradient(v.x, v.y, 8, v.x, v.y, 28);
+      glow.addColorStop(0, 'rgba(105,240,174,.15)');
+      glow.addColorStop(1, 'transparent');
+      chCtx.fillStyle = glow;
+      chCtx.fillRect(v.x - 28, v.y - 28, 56, 56);
+    }
+    if (isOverDeg) {
+      var glow2 = chCtx.createRadialGradient(v.x, v.y, 8, v.x, v.y, 28);
+      glow2.addColorStop(0, 'rgba(255,82,82,.15)');
+      glow2.addColorStop(1, 'transparent');
+      chCtx.fillStyle = glow2;
+      chCtx.fillRect(v.x - 28, v.y - 28, 56, 56);
+    }
+
+    // Shadow
+    chCtx.save();
+    chCtx.shadowColor = isExactDeg ? 'rgba(105,240,174,.3)' : isOverDeg ? 'rgba(255,82,82,.3)' : 'rgba(0,0,0,.3)';
+    chCtx.shadowBlur = 12;
+
+    // Vertex circle
+    chCtx.beginPath();
+    chCtx.arc(v.x, v.y, 16, 0, Math.PI * 2);
+    var grad = chCtx.createRadialGradient(v.x - 3, v.y - 3, 2, v.x, v.y, 16);
+    if (isExactDeg) {
+      grad.addColorStop(0, '#2a4a3a');
+      grad.addColorStop(1, '#1a3028');
+    } else if (isOverDeg) {
+      grad.addColorStop(0, '#4a2a2a');
+      grad.addColorStop(1, '#301a1a');
+    } else {
+      grad.addColorStop(0, '#253550');
+      grad.addColorStop(1, '#1a2540');
+    }
+    chCtx.fillStyle = grad;
+    chCtx.fill();
+
+    chCtx.strokeStyle = isOverDeg ? '#ff5252' : isExactDeg ? '#69f0ae' : 'rgba(0,229,255,.3)';
+    chCtx.lineWidth = 2;
+    chCtx.stroke();
+    chCtx.restore();
+
+    // Label
+    chCtx.fillStyle = isOverDeg ? '#ff8a80' : isExactDeg ? '#b9f6ca' : '#e0e6f0';
+    chCtx.font = 'bold 12px ' + getComputedStyle(document.body).getPropertyValue('--mono');
+    chCtx.textAlign = 'center';
+    chCtx.textBaseline = 'middle';
+    chCtx.fillText(v.label, v.x, v.y);
+  });
+}
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+}
+
+// ---- Validation ----
+function chValidateCycle() {
+  // Returns { valid, errors[] }
+  const errors = [];
+  const sel = chSelected;
+
+  // Count degrees
+  const deg = new Array(8).fill(0);
+  const adj = Array.from({ length: 8 }, () => []);
+  sel.forEach(k => {
+    const [a, b] = chEdgeFromKey(k);
+    deg[a]++;
+    deg[b]++;
+    adj[a].push(b);
+    adj[b].push(a);
+  });
+
+  // Check degree = 2 for all
+  let allDeg2 = true;
+  for (let i = 0; i < 8; i++) {
+    if (deg[i] !== 2) {
+      allDeg2 = false;
+      errors.push(`顶点 ${CH_VERTS[i].label} 的度数为 ${deg[i]}` + (deg[i] < 2 ? '（不足）' : '（过多）'));
+    }
+  }
+
+  if (!allDeg2) return { valid: false, errors };
+
+  // Check connectivity (BFS from vertex 0)
+  const visited = new Set();
+  const queue = [0];
+  visited.add(0);
+  while (queue.length) {
+    const v = queue.shift();
+    for (const nb of adj[v]) {
+      if (!visited.has(nb)) {
+        visited.add(nb);
+        queue.push(nb);
+      }
+    }
+  }
+
+  if (visited.size < 8) {
+    const missing = [];
+    for (let i = 0; i < 8; i++) {
+      if (!visited.has(i)) missing.push(CH_VERTS[i].label);
+    }
+    errors.push(`图不连通：顶点 ${missing.join(', ')} 无法到达`);
+    errors.push('存在多个互不连通的小环');
+    return { valid: false, errors };
+  }
+
+  // All checks passed
+  return { valid: true, errors: [] };
+}
+
+function chSubmit() {
+  const lvl = CH_LEVELS[chCurrentLevel];
+  const result = chValidateCycle();
+
+  if (result.valid) {
+    chCompleted[chCurrentLevel] = true;
+    document.querySelectorAll('.ch-level-btn')[chCurrentLevel].classList.add('completed');
+
+    let msg = '✓ 恭喜！你找到了一个合法的哈密顿环！';
+
+    // For optimal level, check cost
+    if (lvl.weights) {
+      let totalCost = 0;
+      chSelected.forEach(k => {
+        const [a, b] = chEdgeFromKey(k);
+        totalCost += chEdgeWeight(a, b);
+      });
+
+      const optimal = chFindOptimalCost();
+      msg += `<br>总代价: <strong>${totalCost}</strong>`;
+
+      if (totalCost === optimal) {
+        msg += '<br>✓ 这就是最优解！';
+      } else {
+        msg += `<br>已知最优代价: ${optimal}。还能更小吗？`;
+      }
+    }
+
+    // Show discovery for completed levels
+    if (chCompleted.every(c => c)) {
+      chShowDiscovery();
+    }
+
+    chShowFeedback(msg, 'success');
+  } else {
+    chShowFeedback(
+      '✗ 还不是合法的哈密顿环：<br>• ' + result.errors.join('<br>• '),
+      'error'
+    );
+  }
+}
+
+function chSubmitAnswer(exists) {
+  if (exists) {
+    // Player says exists - let them try to find it
+    chShowFeedback('你认为存在哈密顿环。试着选出边来证明！选好后点「提交验证」。', 'info');
+    // Change actions to include submit
+    document.getElementById('chActions').innerHTML =
+      '<button class="ch-action-btn primary" onclick="chSubmit()">提交验证</button>' +
+      '<button class="ch-action-btn" onclick="chClearSelection()">清空</button>' +
+      '<button class="ch-action-btn danger" onclick="chSubmitAnswer(false)">改答：不存在</button>';
+  } else {
+    // Player says no solution - show reasoning modal
+    chShowNoSolutionModal();
+  }
+}
+
+function chShowNoSolutionModal() {
+  const modal = document.getElementById('chModal');
+  const options = document.getElementById('chModalOptions');
+
+  options.innerHTML = `
+    <button class="ch-modal-option" onclick="chCheckReason('degree')">
+      有顶点度数 &lt; 2<span class="reason-tag">deg(v) &lt; 2</span>
+    </button>
+    <button class="ch-modal-option" onclick="chCheckReason('disconnected')">
+      删除边后图不连通<span class="reason-tag">连通性</span>
+    </button>
+    <button class="ch-modal-option" onclick="chCheckReason('parity')">
+      二分图两部分顶点数不等<span class="reason-tag">奇偶性</span>
+    </button>
+  `;
+
+  modal.classList.add('show');
+}
+
+function chCloseModal() {
+  document.getElementById('chModal').classList.remove('show');
+}
+
+function chCheckReason(reason) {
+  chCloseModal();
+  const lvl = CH_LEVELS[chCurrentLevel];
+
+  // Level 3: forbidden edges [0,1], [0,2], [0,4]
+  // Vertex 0 loses ALL edges → degree 0
+  // Correct answer: degree
+
+  if (reason === 'degree') {
+    // Check: is there a vertex with degree < 2?
+    const deg = new Array(8).fill(0);
+    CH_ALL_EDGES.forEach(([a, b]) => {
+      const k = chEdgeKey(a, b);
+      if (!chForbidden.has(k)) {
+        deg[a]++;
+        deg[b]++;
+      }
+    });
+
+    let found = false;
+    for (let i = 0; i < 8; i++) {
+      if (deg[i] < 2) {
+        found = true;
+        chCompleted[chCurrentLevel] = true;
+        document.querySelectorAll('.ch-level-btn')[chCurrentLevel].classList.add('completed');
+        chShowFeedback(
+          `✓ 正确！顶点 ${CH_VERTS[i].label} 只有 ${deg[i]} 条可用边，不足以构成哈密顿环（每个顶点需要恰好 2 条边）。`,
+          'success'
+        );
+        break;
+      }
+    }
+    if (!found) {
+      chShowFeedback('✗ 这个理由不成立——所有顶点的可用度数都 ≥ 2。', 'error');
+    }
+  } else if (reason === 'disconnected') {
+    // Check connectivity with available edges
+    const adj = Array.from({ length: 8 }, () => []);
+    CH_ALL_EDGES.forEach(([a, b]) => {
+      const k = chEdgeKey(a, b);
+      if (!chForbidden.has(k)) {
+        adj[a].push(b);
+        adj[b].push(a);
+      }
+    });
+
+    const visited = new Set();
+    const queue = [0];
+    visited.add(0);
+    while (queue.length) {
+      const v = queue.shift();
+      for (const nb of adj[v]) {
+        if (!visited.has(nb)) {
+          visited.add(nb);
+          queue.push(nb);
+        }
+      }
+    }
+
+    if (visited.size < 8) {
+      chCompleted[chCurrentLevel] = true;
+      document.querySelectorAll('.ch-level-btn')[chCurrentLevel].classList.add('completed');
+      chShowFeedback(
+        `✓ 正确！删除禁止边后，图不再连通。顶点 ${[...Array(8).keys()].filter(i => !visited.has(i)).map(i => CH_VERTS[i].label).join(', ')} 无法到达。`,
+        'success'
+      );
+    } else {
+      chShowFeedback('✗ 这个理由不成立——删除禁止边后图仍然连通。', 'error');
+    }
+  } else if (reason === 'parity') {
+    // Check bipartite parity
+    // Even parity vertices: popcount even
+    const even = [], odd = [];
+    for (let i = 0; i < 8; i++) {
+      const bits = (i >> 2) + ((i >> 1) & 1) + (i & 1);
+      if (bits % 2 === 0) even.push(i);
+      else odd.push(i);
+    }
+
+    // Check if both groups still have same count with available vertices
+    // For level 3: all 8 vertices still exist, so |E|=4, |O|=4
+    // Parity argument doesn't apply here (no vertices removed)
+    chShowFeedback('✗ 这个理由不适用于此题——所有 8 个顶点都存在，偶奇两组各有 4 个。试试其他理由。', 'error');
+  }
+}
+
+// Find optimal cost for level 4 (brute force all Hamiltonian cycles)
+function chFindOptimalCost() {
+  // Generate all permutations of [1..7] (fixing 0 as start)
+  let bestCost = Infinity;
+
+  function permute(arr, l) {
+    if (l === arr.length) {
+      // Check if this forms a valid cycle: 0 -> arr[0] -> ... -> arr[6] -> 0
+      const path = [0, ...arr, 0];
+      let cost = 0;
+      let valid = true;
+      for (let i = 0; i < path.length - 1; i++) {
+        const a = path[i], b = path[i + 1];
+        const k = chEdgeKey(a, b);
+        if (!CH_EDGE_MAP[k]) {
+          valid = false;
+          break;
+        }
+        const w = chEdgeWeight(a, b);
+        if (w === null) { valid = false; break; }
+        cost += w;
+      }
+      if (valid && cost < bestCost) bestCost = cost;
+      return;
+    }
+    for (let i = l; i < arr.length; i++) {
+      [arr[l], arr[i]] = [arr[i], arr[l]];
+      permute(arr, l + 1);
+      [arr[l], arr[i]] = [arr[i], arr[l]];
+    }
+  }
+
+  permute([1, 2, 3, 4, 5, 6, 7], 0);
+  return bestCost;
+}
+
+// ---- Discovery: dimension flip invariant ----
+function chShowDiscovery() {
+  const disc = document.getElementById('chDiscovery');
+  disc.style.display = 'block';
+
+  // For each completed cycle, compute flip counts
+  // In 3D, each edge flips one of 3 bits
+  // Count flips for bit 0, 1, 2
+  const flipCounts = [0, 0, 0];
+  const edges = [];
+  chSelected.forEach(k => {
+    const [a, b] = chEdgeFromKey(k);
+    edges.push([a, b]);
+  });
+
+  // Find the actual cycle order
+  const adj = Array.from({ length: 8 }, () => []);
+  edges.forEach(([a, b]) => {
+    adj[a].push(b);
+    adj[b].push(a);
+  });
+
+  // Walk the cycle
+  const cycle = [0];
+  let prev = 0, cur = adj[0][0];
+  while (cur !== 0) {
+    cycle.push(cur);
+    const next = adj[cur][0] === prev ? adj[cur][1] : adj[cur][0];
+    prev = cur;
+    cur = next;
+  }
+  cycle.push(0);
+
+  // Count flips
+  for (let i = 0; i < cycle.length - 1; i++) {
+    const xor = cycle[i] ^ cycle[i + 1];
+    for (let b = 0; b < 3; b++) {
+      if (xor & (1 << b)) flipCounts[b]++;
+    }
+  }
+
+  const sorted = [...flipCounts].sort((a, b) => b - a);
+
+  document.getElementById('chDiscoveryContent').innerHTML = `
+    <p>你完成的哈密顿环中，三个维度的翻转次数为：</p>
+    <div class="flip-counts">
+      第2位: ${flipCounts[2]}次 &nbsp; 第1位: ${flipCounts[1]}次 &nbsp; 第0位: ${flipCounts[0]}次
+    </div>
+    <p>观察规律：无论选哪条路径，结果都是 <strong>4, 2, 2</strong> 的某种排列。</p>
+    <div class="proof">
+为什么不可能是 3, 3, 2？
+
+1. 回到起点 → 每位翻转次数必为偶数
+   3 是奇数 → 不可能 ✓
+
+为什么不可能是 6, 1, 1？
+
+2. 1 是奇数 → 不可能 ✓
+
+为什么只能是 4, 2, 2？
+
+3. 三个正偶数之和 = 8（环有 8 条边）
+4. 唯一解：4 + 2 + 2 = 8
+   （排除 2+2+4, 2+4+2, 4+2+2 → 排列）
+    </div>
+    <p><strong>结论：</strong>三维立方体的任意哈密顿环中，必然有一个维度被翻转 4 次，另外两个各翻转 2 次。这是一个<strong>拓扑不变量</strong>——与具体路径无关。</p>
+  `;
+}
+
+// ---- Nav highlight for scroll ----
+const allSections = ['top', 'sec-2d', 'sec-3d', 'sec-mirror', 'sec-interactive', 'sec-challenges'];
+const allNavLinks = document.querySelectorAll('nav a');
+
+function updateNavAll() {
+  let current = 0;
+  const scrollY = window.scrollY + 100;
+  allSections.forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (el && el.offsetTop <= scrollY) current = i;
+  });
+  allNavLinks.forEach((a, i) => a.classList.toggle('active', i === current));
+}
+window.removeEventListener('scroll', updateNav);
+window.addEventListener('scroll', updateNavAll);
+updateNavAll();
+
+// Initialize challenges
+chLoadLevel(0);
+
+</script>
+</body>
+</html>
